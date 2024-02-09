@@ -42,9 +42,11 @@ var query = new QueryExpression
     },
     EntityName = entity.LogicalName
 };
+LinkEntity link = query.AddLink("systemuser", "ownerid", "systemuserid", JoinOperator.Inner);
+link.Columns.AddColumns("fullname");
+link.EntityAlias = "owner";
 
 var results = await serviceClient.RetrieveMultipleAsync(query);
-
 
 do
 {
@@ -54,7 +56,8 @@ do
         {
             Id = recod.Id.ToString(),
             Name = recod.GetAttributeValue<string>("name"),
-            Size = System.Text.Encoding.Unicode.GetByteCount(recod.GetAttributeValue<string>("clientdata"))
+            Size = System.Text.Encoding.Unicode.GetByteCount(recod.GetAttributeValue<string>("clientdata")),
+            OwnerName = recod.GetAttributeValue<AliasedValue>("owner.fullname").Value.ToString()
         });
     }
 
@@ -73,9 +76,11 @@ do
 
 list = list.OrderBy(x => x.Size).ToList();
 
+Console.WriteLine($"Display desktop flows by size on the environment {serviceClient.OrganizationDetail.FriendlyName}");
+
 foreach (var item in list)
 {
-    Console.WriteLine($"DesktopFlow: {item.Name} with id: {item.Id} Size: {BytesToString(item.Size)}");
+    Console.WriteLine($"DesktopFlow: {item.Name} with id: {item.Id}, Size: {BytesToString(item.Size)}, Owner: {item.OwnerName}");
 }
 
 static String BytesToString(long byteCount)
