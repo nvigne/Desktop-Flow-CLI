@@ -4,27 +4,50 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.PowerPlatform.Dataverse.Client.Model;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
+using System.CommandLine;
 
-var list = new List<DesktopFlow>();
 
-var serviceClient = new ServiceClient(connectionOptions: new ConnectionOptions
+var rootCommand = new RootCommand();
+rootCommand.Description = "This tool will list all desktop flows in a Dataverse environment and sort them by size.";
+
+var cServiceUri = new Option<string>("--service-uri", "The service uri.");
+
+var command = new Command("list", "List all desktop flows in a Dataverse environment and sort them by size.")
 {
-    LoginPrompt = Microsoft.PowerPlatform.Dataverse.Client.Auth.PromptBehavior.Auto,
-    AuthenticationType = Microsoft.PowerPlatform.Dataverse.Client.AuthenticationType.OAuth,
-    ServiceUri = new Uri(""),
-    RedirectUri = new Uri("http://localhost")
-}, false, null);
+    cServiceUri,
+};
 
-serviceClient.Connect();
-
-Entity entity = new("workflow");
-
-var query = new QueryExpression
+command.SetHandler((string serviceUri) =>
 {
-    ColumnSet = new ColumnSet("workflowid", "name", "clientdata"),
-    Criteria = new FilterExpression
+    ListDesktopFlows(serviceUri).Wait();
+}, cServiceUri);
+
+rootCommand.Add(command);
+
+await rootCommand.InvokeAsync(args);
+
+async Task ListDesktopFlows(string serviceUri)
+{
+    var list = new List<DesktopFlow>();
+
+    var serviceClient = new ServiceClient(connectionOptions: new ConnectionOptions
     {
-        Conditions =
+        LoginPrompt = Microsoft.PowerPlatform.Dataverse.Client.Auth.PromptBehavior.Auto,
+        AuthenticationType = Microsoft.PowerPlatform.Dataverse.Client.AuthenticationType.OAuth,
+        ServiceUri = new Uri(serviceUri),
+        RedirectUri = new Uri("http://localhost")
+    }, false, null);
+
+    serviceClient.Connect();
+
+    Entity entity = new("workflow");
+
+    var query = new QueryExpression
+    {
+        ColumnSet = new ColumnSet("workflowid", "name", "clientdata"),
+        Criteria = new FilterExpression
+        {
+            Conditions =
         {
             new ConditionExpression
             {
@@ -33,55 +56,58 @@ var query = new QueryExpression
                 Values = { 6 }
             }
         }
-    },
-    PageInfo = new PagingInfo
-    {
-        Count = 10,
-        ReturnTotalRecordCount = true,
-        PageNumber = 1
-    },
-    EntityName = entity.LogicalName
-};
-LinkEntity link = query.AddLink("systemuser", "ownerid", "systemuserid", JoinOperator.Inner);
-link.Columns.AddColumns("fullname");
-link.EntityAlias = "owner";
-
-var results = await serviceClient.RetrieveMultipleAsync(query);
-
-do
-{
-    foreach (var recod in results.Entities)
-    {
-        list.Add(new DesktopFlow
+        },
+        PageInfo = new PagingInfo
         {
-            Id = recod.Id.ToString(),
-            Name = recod.GetAttributeValue<string>("name"),
-            Size = System.Text.Encoding.Unicode.GetByteCount(recod.GetAttributeValue<string>("clientdata")),
-            OwnerName = recod.GetAttributeValue<AliasedValue>("owner.fullname").Value.ToString()
-        });
-    }
+            Count = 10,
+            ReturnTotalRecordCount = true,
+            PageNumber = 1
+        },
+        EntityName = entity.LogicalName
+    };
+    LinkEntity link = query.AddLink("systemuser", "ownerid", "systemuserid", JoinOperator.Inner);
+    link.Columns.AddColumns("fullname");
+    link.EntityAlias = "owner";
 
-    if (results.MoreRecords)
+    var results = await serviceClient.RetrieveMultipleAsync(query);
+
+    do
     {
-        query.PageInfo.PagingCookie = results.PagingCookie;
-        query.PageInfo.PageNumber++;
-        results = await serviceClient.RetrieveMultipleAsync(query);
-    }
-    else
+        foreach (var recod in results.Entities)
+        {
+            list.Add(new DesktopFlow
+            {
+                Id = recod.Id.ToString(),
+                Name = recod.GetAttributeValue<string>("name"),
+                Size = System.Text.Encoding.Unicode.GetByteCount(recod.GetAttributeValue<string>("clientdata")),
+                OwnerName = recod.GetAttributeValue<AliasedValue>("owner.fullname").Value.ToString()
+            });
+        }
+
+        if (results.MoreRecords)
+        {
+            query.PageInfo.PagingCookie = results.PagingCookie;
+            query.PageInfo.PageNumber++;
+            results = await serviceClient.RetrieveMultipleAsync(query);
+        }
+        else
+        {
+            break;
+        }
+    } while (true);
+
+
+    list = list.OrderBy(x => x.Size).ToList();
+
+    Console.WriteLine($"Display desktop flows by size on the environment {serviceClient.OrganizationDetail.FriendlyName}");
+
+    foreach (var item in list)
     {
-        break;
+        Console.WriteLine($"DesktopFlow: {item.Name} with id: {item.Id}, Size: {BytesToString(item.Size)}, Owner: {item.OwnerName}");
     }
-} while (true);
+} 
 
 
-list = list.OrderBy(x => x.Size).ToList();
-
-Console.WriteLine($"Display desktop flows by size on the environment {serviceClient.OrganizationDetail.FriendlyName}");
-
-foreach (var item in list)
-{
-    Console.WriteLine($"DesktopFlow: {item.Name} with id: {item.Id}, Size: {BytesToString(item.Size)}, Owner: {item.OwnerName}");
-}
 
 static String BytesToString(long byteCount)
 {
