@@ -50,14 +50,14 @@ async Task ListDesktopFlows(string serviceUri, int maxSize)
         Criteria = new FilterExpression
         {
             Conditions =
-        {
-            new ConditionExpression
             {
-                AttributeName = "category",
-                Operator = ConditionOperator.Equal,
-                Values = { 6 }
+                new ConditionExpression
+                {
+                    AttributeName = "category",
+                    Operator = ConditionOperator.Equal,
+                    Values = { 6 }
+                },
             }
-        }
         },
         PageInfo = new PagingInfo
         {
@@ -96,8 +96,11 @@ async Task ListDesktopFlows(string serviceUri, int maxSize)
             list.Add(dektopFlow);
         }
 
+        Console.WriteLine($"Retrieved currently {list.Count} desktop flows from the environment.");
+
         if (results.MoreRecords)
         {
+            Console.WriteLine("Getting more records...");
             query.PageInfo.PagingCookie = results.PagingCookie;
             query.PageInfo.PageNumber++;
             results = await serviceClient.RetrieveMultipleAsync(query);
@@ -115,7 +118,7 @@ async Task ListDesktopFlows(string serviceUri, int maxSize)
 
     foreach (var item in list)
     {
-        Console.WriteLine($"DesktopFlow: {item.Name} with id: {item.Id}, Size: {BytesToString(item.Size)}, Owner: {item.OwnerName}");
+        Console.WriteLine($"DesktopFlow: {item.Name} with id: {item.Id}, Size: {BytesToString(item.Size)}, Owner: {item.OwnerName}, Last Modified date: {item.ModifiedOn}");
     }
 } 
 
