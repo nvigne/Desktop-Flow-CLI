@@ -11,22 +11,24 @@ var rootCommand = new RootCommand();
 rootCommand.Description = "This tool will list all desktop flows in a Dataverse environment and sort them by size.";
 
 var cServiceUri = new Option<string>("--service-uri", "The service uri.");
+var maxSize = new Option<int>("--min-size", () => 0, "The minimum size to be displayed.");
 
 var command = new Command("list", "List all desktop flows in a Dataverse environment and sort them by size.")
 {
+    maxSize,
     cServiceUri,
 };
 
-command.SetHandler((string serviceUri) =>
+command.SetHandler((string serviceUri, int maxSize) =>
 {
-    ListDesktopFlows(serviceUri).Wait();
-}, cServiceUri);
+    ListDesktopFlows(serviceUri, maxSize).Wait();
+}, cServiceUri, maxSize);
 
 rootCommand.Add(command);
 
 await rootCommand.InvokeAsync(args);
 
-async Task ListDesktopFlows(string serviceUri)
+async Task ListDesktopFlows(string serviceUri, int maxSize)
 {
     var list = new List<DesktopFlow>();
 
@@ -44,7 +46,7 @@ async Task ListDesktopFlows(string serviceUri)
 
     var query = new QueryExpression
     {
-        ColumnSet = new ColumnSet("workflowid", "name", "clientdata"),
+        ColumnSet = new ColumnSet("workflowid", "name", "clientdata", "modifiedon"),
         Criteria = new FilterExpression
         {
             Conditions =
@@ -59,7 +61,7 @@ async Task ListDesktopFlows(string serviceUri)
         },
         PageInfo = new PagingInfo
         {
-            Count = 10,
+            Count = 100,
             ReturnTotalRecordCount = true,
             PageNumber = 1
         },
@@ -67,6 +69,7 @@ async Task ListDesktopFlows(string serviceUri)
     };
     LinkEntity link = query.AddLink("systemuser", "ownerid", "systemuserid", JoinOperator.Inner);
     link.Columns.AddColumns("fullname");
+    link.Columns.AddColumn("internalemailaddress");
     link.EntityAlias = "owner";
 
     var results = await serviceClient.RetrieveMultipleAsync(query);
@@ -75,13 +78,22 @@ async Task ListDesktopFlows(string serviceUri)
     {
         foreach (var recod in results.Entities)
         {
-            list.Add(new DesktopFlow
+            var size = System.Text.Encoding.Unicode.GetByteCount(recod.GetAttributeValue<string>("clientdata"));
+            if (size < maxSize)
+            {
+                continue;
+            }
+
+            var dektopFlow = new DesktopFlow
             {
                 Id = recod.Id.ToString(),
                 Name = recod.GetAttributeValue<string>("name"),
-                Size = System.Text.Encoding.Unicode.GetByteCount(recod.GetAttributeValue<string>("clientdata")),
-                OwnerName = recod.GetAttributeValue<AliasedValue>("owner.fullname").Value.ToString()
-            });
+                Size = size,
+                OwnerName = recod.GetAttributeValue<AliasedValue>("owner.internalemailaddress").Value.ToString(),
+                ModifiedOn = recod.GetAttributeValue<DateTime>("modifiedon"),
+            };
+
+            list.Add(dektopFlow);
         }
 
         if (results.MoreRecords)
@@ -97,7 +109,7 @@ async Task ListDesktopFlows(string serviceUri)
     } while (true);
 
 
-    list = list.OrderBy(x => x.Size).ToList();
+    list = list.OrderByDescending(x => x.Size).ToList();
 
     Console.WriteLine($"Display desktop flows by size on the environment {serviceClient.OrganizationDetail.FriendlyName}");
 
