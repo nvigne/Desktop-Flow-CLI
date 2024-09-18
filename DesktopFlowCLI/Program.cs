@@ -5,6 +5,7 @@ using Microsoft.PowerPlatform.Dataverse.Client.Model;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using System.CommandLine;
+using System.Text;
 
 
 var rootCommand = new RootCommand();
@@ -12,23 +13,25 @@ rootCommand.Description = "This tool will list all desktop flows in a Dataverse 
 
 var cServiceUri = new Option<string>("--service-uri", "The service uri.");
 var maxSize = new Option<int>("--min-size", () => 0, "The minimum size to be displayed.");
+var path = new Option<string>("--path", "The path to save the output file.");
 
 var command = new Command("list", "List all desktop flows in a Dataverse environment and sort them by size.")
 {
     maxSize,
     cServiceUri,
+    path,
 };
 
-command.SetHandler((string serviceUri, int maxSize) =>
+command.SetHandler((string serviceUri, int maxSize, string path) =>
 {
-    ListDesktopFlows(serviceUri, maxSize).Wait();
-}, cServiceUri, maxSize);
+    ListDesktopFlows(serviceUri, maxSize, path).Wait();
+}, cServiceUri, maxSize, path);
 
 rootCommand.Add(command);
 
 await rootCommand.InvokeAsync(args);
 
-async Task ListDesktopFlows(string serviceUri, int maxSize)
+async Task ListDesktopFlows(string serviceUri, int maxSize, string path)
 {
     var list = new List<DesktopFlow>();
 
@@ -73,9 +76,12 @@ async Task ListDesktopFlows(string serviceUri, int maxSize)
     link.EntityAlias = "owner";
 
     var results = await serviceClient.RetrieveMultipleAsync(query);
+    using var file = File.OpenWrite(path);
+    await file.WriteAsync(Encoding.UTF8.GetBytes("Name,Size,Owner,ModifiedOn\n"));
 
     do
     {
+        var tempList = new List<DesktopFlow>();
         foreach (var recod in results.Entities)
         {
             var size = System.Text.Encoding.Unicode.GetByteCount(recod.GetAttributeValue<string>("clientdata"));
@@ -94,9 +100,17 @@ async Task ListDesktopFlows(string serviceUri, int maxSize)
             };
 
             list.Add(dektopFlow);
+            tempList.Add(dektopFlow);
         }
 
         Console.WriteLine($"Retrieved currently {list.Count} desktop flows from the environment.");
+
+        foreach (var item in tempList)
+        {
+            await file.WriteAsync(Encoding.UTF8.GetBytes($"{item.Name},{item.Size},{item.OwnerName},{item.ModifiedOn}\n"));
+        }
+
+        await file.FlushAsync();
 
         if (results.MoreRecords)
         {
