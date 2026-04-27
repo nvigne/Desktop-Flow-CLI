@@ -2,9 +2,9 @@
 
 internal class DesktopFlow
 {
-    internal string Id { get; set; }
-    internal string Name { get; set; }
+    internal string Id { get; set; } = string.Empty;
+    internal string Name { get; set; } = string.Empty;
     internal int Size { get; set; }
-    internal string OwnerName { get; set; }
+    internal string OwnerName { get; set; } = string.Empty;
     internal DateTime ModifiedOn { get; set; }
 }
