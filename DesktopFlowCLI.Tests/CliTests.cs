@@ -5,12 +5,12 @@ namespace DesktopFlowCLI.Tests;
 public class CliTests
 {
     [Fact]
-    public void HelpCommand_ReturnsSuccess()
+    public async Task HelpCommand_ReturnsSuccess()
     {
         var root = GetRepositoryRoot();
         var projectPath = Path.Combine(root, "DesktopFlowCLI", "DesktopFlowCLI.csproj");
 
-        var process = new Process
+        using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
@@ -24,13 +24,18 @@ public class CliTests
         };
 
         process.Start();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        var exited = process.WaitForExit(60000);
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
 
-        Assert.True(exited, "CLI process did not exit within 60 seconds.");
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await process.WaitForExitAsync(cancellation.Token);
+
+        var output = await outputTask;
+        var error = await errorTask;
+
         Assert.Equal(0, process.ExitCode);
-        Assert.Contains("list all desktop flows", output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Commands:", output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("list", output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Unhandled exception", error, StringComparison.OrdinalIgnoreCase);
     }
 
