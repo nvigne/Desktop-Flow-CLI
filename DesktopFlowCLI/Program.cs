@@ -107,7 +107,7 @@ internal class Program
                         Id = recod.Id.ToString(),
                         Name = recod.GetAttributeValue<string>("name"),
                         Size = size,
-                        OwnerName = recod.GetAttributeValue<AliasedValue>("owner.internalemailaddress").Value.ToString(),
+                        OwnerName = recod.GetAttributeValue<AliasedValue>("owner.internalemailaddress")?.Value?.ToString() ?? string.Empty,
                         ModifiedOn = recod.GetAttributeValue<DateTime>("modifiedon"),
                     };
 
