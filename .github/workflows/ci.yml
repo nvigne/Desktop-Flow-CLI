@@ -25,3 +25,6 @@ jobs:
 
       - name: Build
         run: dotnet build Desktop-Flow-CLI.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Desktop-Flow-CLI.slnx --configuration Release --no-build
